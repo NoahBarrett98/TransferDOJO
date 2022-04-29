@@ -42,7 +42,11 @@ def run_train_session(
     num_outputs_pretrained=2,
     split_seed=10,
     freeze_base=False,
+    snapshot_dir=None,
+    num_snapshots=1
 ):
+
+
     # preloaded data to prevent reloading
     train_loader, test_loader, val_loader, num_outputs = data.__dict__[data_name](
         label_dir,
@@ -51,7 +55,19 @@ def run_train_session(
         batch_size,
         one_channel=one_channel,
         split_seed=split_seed,
+        snapshot_dir=snapshot_dir
     )
+    if snapshot_dir:
+        # INIT ReprD
+        data_size = len(train_loader)
+        reprd = ReprD(
+            data_size=data_size,
+            num_epochs=num_epochs,
+            num_snapshots=num_snapshots,
+            save_path=snapshot_dir
+        )
+    else:
+        reprd = None
     # load model
     model = models.__dict__[model_name](
         pretrained=True, num_outputs=num_outputs_pretrained, one_channel=one_channel
@@ -73,6 +89,7 @@ def run_train_session(
     else:
         scheduler = None
 
+
     # train model
     model = train.__dict__[train_strategy](
         model=model,
@@ -83,6 +100,7 @@ def run_train_session(
         num_epochs=num_epochs,
         writer=writer,
         num_outputs=num_outputs,
+        reprd=reprd
     )
     # evaluate model
     test_eval_results = evaluation.evaluate(model, test_loader, train_strategy)
@@ -306,6 +324,18 @@ def train_bootstrap(
     type=int,
     help="Number of outputs of pretrained model",
 )
+@click.option(
+    "--snapshot_dir",
+    default=None,
+    type=str,
+    help="Directory to save snapshots for ReprDynamics",
+)
+@click.option(
+    "--num_snapshots",
+    default=1,
+    type=int,
+    help="number of snapshots for ReprDynamics",
+)
 def train_model(
     label_dir,
     data_dir,
@@ -325,6 +355,8 @@ def train_model(
     one_channel,
     load_model_from,
     num_outputs_pretrained,
+    snapshot_dir,
+    num_snapshots
 ):
 
     # setup tensorboard
@@ -359,6 +391,8 @@ def train_model(
         one_channel,
         load_model_from,
         num_outputs_pretrained,
+        snapshot_dir,
+        num_snapshots
     )
     # mlflow logging
     with mlflow.start_run():

@@ -17,6 +17,8 @@ from torch.utils.data import Dataset
 from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 
+from ReprDynamics.back_end.dataset import ReprDataset
+
 
 
 
@@ -88,6 +90,7 @@ def FetalPlanes(
     normalize_option="paper",
     problem_type="MultiClass_FP",
     one_channel=False,
+        snapshot_dir=None
 ):
     """
     fetal planes - training subset
@@ -108,6 +111,11 @@ def FetalPlanes(
         one_channel=one_channel, normalize_option=normalize_option
     )
     train_set = FetalPlanesDataset(train_csv, data_dir, transforms.train, problem_type)
+    if snapshot_dir:
+        # convert to ReprD dataset
+        X, y = train_set.to_numpy()
+        train_set = ReprDataset(X, y, transforms.train)
+
     test_set = FetalPlanesDataset(test_csv, data_dir, transforms.test, problem_type)
     num_classes = train_set.num_classes
     if validation_split:
@@ -167,6 +175,18 @@ class FetalPlanesDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.csv_f)
 
+    def to_numpy(self):
+        labels = []
+        images = []
+        for index in range(self.__len__):
+            filename = self.csv_f["Image_name"][index]
+            label = self.class2index[self.csv_f[self.class_key][index]]
+            image = np.array(PIL.Image.open(os.path.join(self.data_dir, filename + ".png")))
+            labels.append(label)
+            images.append(image)
+        return np.array(images), np.array(labels)
+
+
     def __getitem__(self, index):
         filename = self.csv_f["Image_name"][index]
         label = self.class2index[self.csv_f[self.class_key][index]]
@@ -174,7 +194,10 @@ class FetalPlanesDataset(torch.utils.data.Dataset):
         if self.transform is not None:
             image = self.transform(image)
 
-        return image, label
+        return {
+                "X": image,
+                "y": label,
+            }
 
 
 class GaussianBlur(object):

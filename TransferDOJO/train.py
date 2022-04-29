@@ -16,6 +16,7 @@ def train_simclr(
     writer,
     save_model_dir,
     temperature=0.1,
+    snapshot_dir=None
 ):
     def info_nce_loss(features):
 
@@ -87,6 +88,7 @@ def train_classification(
     num_epochs,
     writer,
     num_outputs,
+    reprd
 ):
     pbar = tqdm.tqdm(range(num_epochs))
     # CE for classification
@@ -94,9 +96,9 @@ def train_classification(
     # training
     for epoch in pbar:
         running_loss = 0.0
-        for i, (inputs, labels) in enumerate(train_loader, 0):
+        for i, data in enumerate(train_loader, 0):
             # put on gpu
-            inputs, labels = inputs.cuda(), labels.cuda()
+            inputs, labels = data["X"].cuda(), data["y"].cuda()
             optimizer.zero_grad()
             # outputs = model(inputs)
             outputs = torch.nn.functional.softmax(model(inputs), dim=1)
@@ -104,13 +106,16 @@ def train_classification(
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
+            if reprd and (not epoch % reprd.step_size):
+                reprd.store_batch(representation=outputs, ids=ata["index"], epoch=epoch)
+
         if scheduler:
             scheduler.step()
         # get validation loss #
         with torch.no_grad():
             val_running_loss = 0.0
-            for i, (inputs, labels) in enumerate(val_loader, 0):
-                inputs, labels = inputs.cuda(), labels.cuda()
+            for i, data in enumerate(val_loader, 0):
+                inputs, labels = data["X"].cuda(), data["y"].cuda()
                 # outputs = model(inputs)
                 outputs = torch.nn.functional.softmax(model(inputs), dim=1)
                 loss = criterion(outputs, labels)
