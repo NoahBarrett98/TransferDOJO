@@ -90,43 +90,101 @@ class DenseNet169(nn.Module):
         self.base[0] = squeezed_conv0
 
 
+# class ResNet18(nn.Module):
+#     def __init__(self, pretrained, num_outputs=2):
+#         super(ResNet18, self).__init__()
+#         self.base = models.resnet18(pretrained=pretrained)
+#         self.conv1 = self.base.conv1
+#         self.bn1 = self.base.bn1
+#         self.relu = self.base.relu
+#         self.maxpool = self.base.maxpool
+#         self.layer1 = self.base.layer1
+#         self.layer2 = self.base.layer2
+#         self.layer3 = self.base.layer3
+#         self.layer4 = self.base.layer4
+#         self.avgpool = self.base.avgpool
+#         self.__in_features = self.base.fc.in_features
+#         self.classifier = torch.nn.Sequential(
+#             torch.nn.Linear(in_features=512, out_features=num_outputs, bias=True),
+#         )
+#
+#     def forward(self, x):
+#         x = self.feature_forward(x)
+#         x = self.classifier(x)
+#         return x
+#
+#     def feature_forward(self, x):
+#         x = self.conv1(x)
+#         x = self.bn1(x)
+#         x = self.relu(x)
+#         x = self.maxpool(x)
+#         x = self.layer1(x)
+#         x = self.layer2(x)
+#         x = self.layer3(x)
+#         x = self.layer4(x)
+#         x = self.avgpool(x)
+#         x = x.view(x.size(0), -1)
+#         return x
+#
+#     def feature_dim(self):
+#         return self.__in_features
+
 class ResNet18(nn.Module):
-    def __init__(self, pretrained, num_outputs=2):
+    def __init__(self, pretrained):
         super(ResNet18, self).__init__()
         self.base = models.resnet18(pretrained=pretrained)
-        self.conv1 = self.base.conv1
-        self.bn1 = self.base.bn1
-        self.relu = self.base.relu
-        self.maxpool = self.base.maxpool
-        self.layer1 = self.base.layer1
-        self.layer2 = self.base.layer2
-        self.layer3 = self.base.layer3
-        self.layer4 = self.base.layer4
-        self.avgpool = self.base.avgpool
+        self.backbone = nn.Sequential(*list(self.base.children())[:-1])
         self.__in_features = self.base.fc.in_features
         self.classifier = torch.nn.Sequential(
-            torch.nn.Linear(in_features=512, out_features=num_outputs, bias=True),
+            torch.nn.Linear(in_features=self.__in_features, out_features=2, bias=True),
         )
-
-    def forward(self, x):
-        x = self.feature_forward(x)
-        x = self.classifier(x)
-        return x
-
-    def feature_forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        return x
 
     def feature_dim(self):
         return self.__in_features
 
+    @property
+    def forward(self, x):
+        x = self.backbone(x)
+        x = x.view(x.size(0), -1)
+        x = self.classifier(x)
+        return x
 
+
+class ResNet50(nn.Module):
+    def __init__(self, pretrained):
+        super(ResNet50, self).__init__()
+        self.base = models.resnet50(pretrained=pretrained)
+        self.backbone = nn.Sequential(*list(self.base.children())[:-1])
+        self.__in_features = self.base.fc.in_features
+        self.classifier = torch.nn.Sequential(
+            torch.nn.Linear(in_features=self.__in_features, out_features=2, bias=True),
+        )
+
+    @property
+    def feature_dim(self):
+        return self.__in_features
+
+    def forward(self, x):
+        x = self.backbone(x)
+        x = x.view(x.size(0), -1)
+        x = self.classifier(x)
+        return x
+
+class ResNet101(nn.Module):
+    def __init__(self, pretrained):
+        super(ResNet101, self).__init__()
+        self.base = models.resnet101(pretrained=pretrained)
+        self.backbone = nn.Sequential(*list(self.base.children())[:-1])
+        self.__in_features = self.base.fc.in_features
+        self.classifier = torch.nn.Sequential(
+            torch.nn.Linear(in_features=self.__in_features, out_features=2, bias=True),
+        )
+    @property
+    def feature_dim(self):
+        return self.__in_features
+
+    def forward(self, x):
+        x = self.backbone(x)
+        x = x.view(x.size(0), -1)
+        x = self.classifier(x)
+        return x
