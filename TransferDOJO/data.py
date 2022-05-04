@@ -17,10 +17,7 @@ from torch.utils.data import Dataset
 from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 
-from ReprDynamics.back_end.dataset import ReprDataset
-
-
-
+from ReprDynamics.dataset import ReprDataset
 
 
 class FetalPlanesTransform:
@@ -111,20 +108,26 @@ def FetalPlanes(
         one_channel=one_channel, normalize_option=normalize_option
     )
     train_set = FetalPlanesDataset(train_csv, data_dir, transforms.train, problem_type)
+
     if snapshot_dir:
         # convert to ReprD dataset
         X, y = train_set.to_numpy()
         train_set = ReprDataset(X, y, transforms.train)
 
-    test_set = FetalPlanesDataset(test_csv, data_dir, transforms.test, problem_type)
-    num_classes = train_set.num_classes
     if validation_split:
         # split val and train
         train_set, val_set = train_test_split(
             train_set, shuffle=True, test_size=validation_split, random_state=split_seed
         )
+        val_loader = torch.utils.data.DataLoader(
+            val_set, batch_size=batch_size, shuffle=True, num_workers=2
+        )
     else:
         val_loader = None
+
+    test_set = FetalPlanesDataset(test_csv, data_dir, transforms.test, problem_type)
+    num_classes = test_set.num_classes
+
     # make dataloader #
     train_loader = torch.utils.data.DataLoader(
         train_set, batch_size=batch_size, shuffle=True, num_workers=2
@@ -132,9 +135,7 @@ def FetalPlanes(
     test_loader = torch.utils.data.DataLoader(
         test_set, batch_size=batch_size, shuffle=True, num_workers=2
     )
-    val_loader = torch.utils.data.DataLoader(
-        val_set, batch_size=batch_size, shuffle=True, num_workers=2
-    )
+
     return train_loader, test_loader, val_loader, num_classes
 
 
@@ -178,13 +179,13 @@ class FetalPlanesDataset(torch.utils.data.Dataset):
     def to_numpy(self):
         labels = []
         images = []
-        for index in range(self.__len__):
+        for index in range(self.__len__()):
             filename = self.csv_f["Image_name"][index]
             label = self.class2index[self.csv_f[self.class_key][index]]
             image = np.array(PIL.Image.open(os.path.join(self.data_dir, filename + ".png")))
             labels.append(label)
             images.append(image)
-        return np.array(images), np.array(labels)
+        return np.array(images, dtype=object), np.array(labels, dtype=object)
 
 
     def __getitem__(self, index):
@@ -198,6 +199,132 @@ class FetalPlanesDataset(torch.utils.data.Dataset):
                 "X": image,
                 "y": label,
             }
+
+def load_full_cheXpert(label_dir, data_dir, transform=ContrastiveLearningViewGenerator(), problem_type='Binary_CX'):
+    test_csv = pd.read_csv(os.path.join(label_dir, "valid.csv"), delimiter=",")
+    train_csv = pd.read_csv(os.path.join(label_dir, "train.csv"), delimiter=",")
+
+    train_set = CheXpertDataset(train_csv, data_dir, transform, problem_type)
+    test_set = CheXpertDataset(test_csv, data_dir, transform, problem_type)
+    data_set = torch.utils.data.ConcatDataset([train_set, test_set])
+    data_loader = torch.utils.data.DataLoader(
+        XYDatasetWrapper(data_set), batch_size=batch_size, shuffle=True,
+        num_workers=2, drop_last=True)
+    return data_loader
+
+
+def CheXpert(label_dir,
+             data_dir,
+             batch_size,
+             validation_split=None,
+             split_seed=10,
+             use_og_split=True,
+             problem_type="Binary",
+             one_channel=False,
+             snapshot_dir=None):
+    """
+    load train and test loaders from fetal planes ds
+    """
+    # use these for split in data...
+    if use_og_split:
+        test_csv = pd.read_csv(os.path.join(label_dir, "valid.csv"), delimiter=",")
+        train_csv = pd.read_csv(os.path.join(label_dir, "train.csv"), delimiter=",")
+    else:
+        # TODO: add splitting function
+        test = ""
+        train = ""
+
+    # transforms for dataloaders #
+    transforms = CXTransformations(one_channel=one_channel)
+    train_transform = transforms.train
+    test_transform = transforms.test
+    train_set = CheXpertDataset(train_csv, data_dir, train_transform, problem_type)
+    test_set = CheXpertDataset(test_csv, data_dir, test_transform, problem_type)
+    num_classes = train_dataset.num_classes
+
+    if snapshot_dir:
+        # convert to ReprD dataset
+        X, y = train_set.to_numpy()
+        train_set = ReprDataset(X, y, transforms.train)
+    # split val and train
+    if validation_split:
+        train_set, val_set = sklearn.model_selection.train_test_split(
+            train_set, shuffle=True, test_size=validation_split, random_state=split_seed)
+        val_loader = torch.utils.data.DataLoader(val_set, batch_size=batch_size, shuffle=True, num_workers=2)
+    else:
+        val_loader = None
+    # make dataloader #
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2)
+    test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=True, num_workers=2)
+
+    return train_loader, test_loader, val_loader, num_classes
+
+class CXTransformations:
+    """
+    transformations for https://arxiv.org/pdf/1901.07031.pdf
+    """
+
+    def __init__(self, resize=(300, 400), crop=(224, 224),
+                 normalize=((0, 0, 0), (1, 1, 1))):
+        self.train = transforms.Compose([
+            transforms.Grayscale(num_output_channels=1),
+            transforms.Resize(resize),
+            transforms.CenterCrop(crop),
+            transforms.Grayscale(num_output_channels=3),
+            transforms.RandomRotation(15),
+            transforms.RandomAffine(10),
+            transforms.ToTensor(),
+            transforms.Normalize(*normalize)
+
+        ]
+        )
+        self.test = transforms.Compose([
+            transforms.Grayscale(num_output_channels=1),
+            transforms.Resize(resize),
+            transforms.CenterCrop(crop),
+            transforms.Grayscale(num_output_channels=3),
+            transforms.ToTensor(),
+            transforms.Normalize(*normalize)
+            # transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        ]
+        )
+
+class CheXpertDataset(torch.utils.data.Dataset):
+    def __init__(self, csv_f, data_dir, transform=None, problem_type="Binary"):
+        self.csv_f = csv_f
+        self.data_dir = data_dir
+        self.transform = transform
+        if problem_type == "Binary_CX":
+            # problem: finding, no finding
+            self.class_key = 'No Finding'
+            self.num_classes = 2
+
+    def __len__(self):
+        return len(self.csv_f)
+
+    def to_numpy(self):
+        labels = []
+        images = []
+        for index in range(self.__len__()):
+            filename = self.csv_f["Path"][index]
+            label = self.csv_f[self.class_key][index]
+            image = PIL.Image.open(path.join(self.data_dir, filename))
+            labels.append(label)
+            images.append(image)
+        return np.array(images, dtype=object), np.array(labels, dtype=object)
+
+    def __getitem__(self, index):
+        filename = self.csv_f["Path"][index]
+        label = self.csv_f[self.class_key][index]
+        image = PIL.Image.open(path.join(self.data_dir, filename))
+        if self.transform is not None:
+            image = self.transform(image)
+
+        data = {
+            "image": image,
+            "label": label,
+        }
+        return data
 
 
 class GaussianBlur(object):

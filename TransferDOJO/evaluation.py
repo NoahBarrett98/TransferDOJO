@@ -8,7 +8,7 @@ import click
 import pandas as pd
 
 
-from UltraVision import data, models
+from TransferDOJO import data, models
 
 
 def evaluate(model, test_loader, train_strategy):
@@ -29,9 +29,8 @@ def evaluate_classification(model, test_loader):
     # deactivate autograd engine and reduce memory usage and speed up computations
     with torch.no_grad():
         running_loss = 0.0
-        for X, y in test_loader:
-            inputs = X.cuda()
-            labels = y.cuda()
+        for data in test_loader:
+            inputs, labels = data["X"].cuda(), data["y"].cuda()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
             running_loss += loss.item()
@@ -66,10 +65,9 @@ def evaluate_classification_tune(model, test_loader):
     y_true = torch.tensor([], dtype=torch.long).cuda()
     pred_probs = torch.tensor([]).cuda()
     criterion = torch.nn.CrossEntropyLoss()
-    for i, (X, y) in enumerate(test_loader, 0):
+    for i, data in enumerate(test_loader, 0):
         with torch.no_grad():
-            inputs, labels = X, y
-            inputs, labels = inputs.cuda(), labels.cuda()
+            inputs, labels = data["X"].cuda(), data["y"].cuda()
             outputs = model(inputs)
             pred_probs = torch.cat((pred_probs, outputs), 0)
             _, predicted = torch.max(outputs.data, 1)

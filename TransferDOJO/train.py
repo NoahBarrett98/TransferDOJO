@@ -107,33 +107,36 @@ def train_classification(
             optimizer.step()
             running_loss += loss.item()
             if reprd and (not epoch % reprd.step_size):
-                reprd.store_batch(representation=outputs, ids=ata["index"], epoch=epoch)
+                reprd.store_batch(representation=outputs, ids=data["index"], epoch=epoch)
 
         if scheduler:
             scheduler.step()
-        # get validation loss #
-        with torch.no_grad():
-            val_running_loss = 0.0
-            for i, data in enumerate(val_loader, 0):
-                inputs, labels = data["X"].cuda(), data["y"].cuda()
-                # outputs = model(inputs)
-                outputs = torch.nn.functional.softmax(model(inputs), dim=1)
-                loss = criterion(outputs, labels)
-                val_running_loss += loss.item()
+        if val_loader:
+            # get validation loss #
+            with torch.no_grad():
+                val_running_loss = 0.0
+                for i, data in enumerate(val_loader, 0):
+                    inputs, labels = data["X"].cuda(), data["y"].cuda()
+                    # outputs = model(inputs)
+                    outputs = torch.nn.functional.softmax(model(inputs), dim=1)
+                    loss = criterion(outputs, labels)
+                    val_running_loss += loss.item()
+            val_results = evaluation.evaluate(
+                model, val_loader, train_strategy="train_classification"
+            )
         pbar.set_description(f"Loss: {running_loss / len(train_loader):.6f}")
         print(f"running loss: {running_loss}")
         train_results = evaluation.evaluate(
             model, train_loader, train_strategy="train_classification"
         )
-        val_results = evaluation.evaluate(
-            model, val_loader, train_strategy="train_classification"
-        )
+
 
         if writer:
             writer.add_scalar("loss/train", running_loss / len(train_loader), epoch)
             writer.add_scalar("accuracy/train", train_results["accuracy"], epoch)
             writer.add_scalar("auc/train", train_results["auc"], epoch)
-            writer.add_scalar("loss/val", val_running_loss / len(val_loader), epoch)
-            writer.add_scalar("accuracy/val", val_results["accuracy"], epoch)
-            writer.add_scalar("auc/val", val_results["auc"], epoch)
+            if val_loader:
+                writer.add_scalar("loss/val", val_running_loss / len(val_loader), epoch)
+                writer.add_scalar("accuracy/val", val_results["accuracy"], epoch)
+                writer.add_scalar("auc/val", val_results["auc"], epoch)
     return model

@@ -1,0 +1,17 @@
+README.md
+setup.py
+TransferDOJO/data.py
+TransferDOJO/evaluation.py
+TransferDOJO/losses.py
+TransferDOJO/main.py
+TransferDOJO/models.py
+TransferDOJO/optimizers.py
+TransferDOJO/train.py
+TransferDOJO/utils.py
+TransferDOJO.egg-info/PKG-INFO
+TransferDOJO.egg-info/SOURCES.txt
+TransferDOJO.egg-info/dependency_links.txt
+TransferDOJO.egg-info/entry_points.txt
+TransferDOJO.egg-info/not-zip-safe
+TransferDOJO.egg-info/requires.txt
+TransferDOJO.egg-info/top_level.txt

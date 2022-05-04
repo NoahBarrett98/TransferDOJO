@@ -16,6 +16,8 @@ from ray.tune.schedulers import ASHAScheduler
 from functools import partial
 from sklearn.preprocessing import LabelEncoder
 
+from ReprDynamics import ReprD
+
 from TransferDOJO import data
 from TransferDOJO import models
 from TransferDOJO import train
@@ -59,8 +61,8 @@ def run_train_session(
     )
     if snapshot_dir:
         # INIT ReprD
-        data_size = len(train_loader)
-        reprd = ReprD(
+        data_size = len(train_loader.dataset)
+        reprd = ReprD.ReprD(
             data_size=data_size,
             num_epochs=num_epochs,
             num_snapshots=num_snapshots,
@@ -68,16 +70,21 @@ def run_train_session(
         )
     else:
         reprd = None
-    # load model
-    model = models.__dict__[model_name](
-        pretrained=True, num_outputs=num_outputs_pretrained, one_channel=one_channel
-    )
+
+    # load dir #
+    if load_model_from:
+        # load model
+        model = models.__dict__[model_name](
+            pretrained=False, num_outputs=num_outputs_pretrained
+        )
+        model = models.load_base(model, load_model_from, num_outputs)
+    else:
+        model = models.__dict__[model_name](
+            pretrained=True, num_outputs=num_outputs
+        )
 
     # get optimizer
     optimizer = optimizers.__dict__[optimizer_name](model, lr)
-    # load dir #
-    if load_model_from:
-        model = models.load_base(model, load_model_from, num_outputs)
     if freeze_base:
         model = models.freeze_base(model)
     model = model.cuda()
@@ -88,7 +95,6 @@ def run_train_session(
         )
     else:
         scheduler = None
-
 
     # train model
     model = train.__dict__[train_strategy](
@@ -104,8 +110,10 @@ def run_train_session(
     )
     # evaluate model
     test_eval_results = evaluation.evaluate(model, test_loader, train_strategy)
-    val_eval_results = evaluation.evaluate(model, val_loader, train_strategy)
-    return test_eval_results, val_eval_results, model
+    if val_loader:
+        val_eval_results = evaluation.evaluate(model, val_loader, train_strategy)
+        return test_eval_results, val_eval_results, model
+    return test_eval_results, None, model
 
 
 def run_hparam_search(
@@ -279,7 +287,8 @@ def train_bootstrap(
         )
         results[seed] = {}
         results[seed]["test"] = test_eval_results
-        results[seed]["val"] = val_eval_results
+        if val_eval_results:
+            results[seed]["val"] = val_eval_results
 
     if save_results_dir:
         with open(os.path.join(save_results_dir, "eval_results.json"), "w") as f:
@@ -372,45 +381,46 @@ def train_model(
         writer = None
 
     # setup mlflow experiment
-    mlflow.set_experiment(exp_name)
+    #mlflow.set_experiment(experiment_name=exp_name)
+
     # train model
     test_eval_results, val_eval_results, model = run_train_session(
-        label_dir,
-        data_dir,
-        data_name,
-        model_name,
-        train_strategy,
-        use_scheduler,
-        batch_size,
-        val_size,
-        num_epochs,
-        lr,
-        momentum,
-        optimizer_name,
-        writer,
-        one_channel,
-        load_model_from,
-        num_outputs_pretrained,
-        snapshot_dir,
-        num_snapshots
+        label_dir=label_dir,
+        data_dir=data_dir,
+        data_name=data_name,
+        model_name=model_name,
+        train_strategy=train_strategy,
+        use_scheduler=use_scheduler,
+        batch_size=batch_size,
+        val_size=val_size,
+        num_epochs=num_epochs,
+        lr=lr,
+        # momentum,
+        optimizer_name=optimizer_name,
+        writer=writer,
+        one_channel=one_channel,
+        load_model_from=load_model_from,
+        num_outputs_pretrained=num_outputs_pretrained,
+        num_snapshots=num_snapshots,
+        snapshot_dir=snapshot_dir
     )
     # mlflow logging
-    with mlflow.start_run():
-        mlflow.log_param("data_name", data_name)
-        mlflow.log_param("model", model_name)
-        mlflow.log_param("train_strategy", train_strategy)
-        mlflow.log_param("use_scheduler", use_scheduler)
-        mlflow.log_param("batch_size", batch_size)
-        mlflow.log_param("val_size", val_size)
-        mlflow.log_param("num_epochs", num_epochs)
-        mlflow.log_param("lr", lr)
-        mlflow.log_param("momentum", momentum)
-        mlflow.log_param("optimizer", optimizer_name)
-        mlflow.log_param("tboard loc", tensorboard_location)
-        mlflow.log_metric("val_auc", val_eval_results["auc"])
-        mlflow.log_metric("val_accuracy", val_eval_results["accuracy"])
-        mlflow.log_metric("test_auc", test_eval_results["auc"])
-        mlflow.log_metric("test_accuracy", test_eval_results["accuracy"])
+    # with mlflow.start_run():
+    #     mlflow.log_param("data_name", data_name)
+    #     mlflow.log_param("model", model_name)
+    #     mlflow.log_param("train_strategy", train_strategy)
+    #     mlflow.log_param("use_scheduler", use_scheduler)
+    #     mlflow.log_param("batch_size", batch_size)
+    #     mlflow.log_param("val_size", val_size)
+    #     mlflow.log_param("num_epochs", num_epochs)
+    #     mlflow.log_param("lr", lr)
+    #     mlflow.log_param("momentum", momentum)
+    #     mlflow.log_param("optimizer", optimizer_name)
+    #     mlflow.log_param("tboard loc", tensorboard_location)
+    #     mlflow.log_metric("val_auc", val_eval_results["auc"])
+    #     mlflow.log_metric("val_accuracy", val_eval_results["accuracy"])
+    #     mlflow.log_metric("test_auc", test_eval_results["auc"])
+    #     mlflow.log_metric("test_accuracy", test_eval_results["accuracy"])
 
     # save model
     if save_model_dir:

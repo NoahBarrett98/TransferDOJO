@@ -1,0 +1,6 @@
+[console_scripts]
+evaluate_model = TransferDOJO.evaluation:evaluate_model
+evaluate_tuned_models = TransferDOJO.evaluation:evaluate_tuned_models
+hparam_search = TransferDOJO.main:hparam_search_wrapper
+train_bootstrap = TransferDOJO.main:train_bootstrap
+train_model = TransferDOJO.main:train_model

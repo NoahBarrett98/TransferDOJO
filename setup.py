@@ -3,11 +3,12 @@ from setuptools import setup
 
 setup(
     name="TransferDOJO",
-    version="0.1",
+    version="0.1.1",
     description="Transfer Learning Experiments",
     author="Noah Barrett",
     include_package_data=True,
     zip_safe=False,
+    packages=['TransferDOJO'],
     install_requires=[
         "click==7.1.2",
         "click_logging",
@@ -19,7 +20,6 @@ setup(
         "pandas==1.1.3",
         "Pillow",
         "protobuf==3.15.8",
-        "scikit-image==0.17.2",
         "scikit-learn==0.24.2",
         "scipy",
         "tensorboard==2.3.0",
